@@ -29,7 +29,7 @@ Tables in the apc schema contain both passenger loading and timestamp informatio
 
 Metrics are calculated using a general program that requires a standardized input table. Custom queries are used to collect and reformat MBTA data from the MBTA Research server to match the standard input table specifications. The query scripts can be found [here](https://github.mit.edu/caros/MBTA-bus-visualization-tool/tree/master/queries). The standard input table includes the following columns:
 
-| Stop Time | Route ID | Stop ID | Stop Sequence | Distance Travelled | Dwell Time | Passenger Load | Seated Capacity | Trip ID | 
+| Stop Time | Route ID | Stop ID | Stop Sequence | Distance Travelled | Dwell Time | Passenger Load | Passenger Board | Passenger Alight | Seated Capacity | Trip ID | 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
 Notes: The passenger loading is passenger loading upon departure from the stop. Route ID, Stop ID, Trip ID and Stop Sequence must match their corresponding GTFS fields. 
@@ -44,6 +44,8 @@ Stop Sequence | apc.stop.stopseqid
 Distance Travelled | apc.stop.actmilessincelaststop
 Dwell Time | apc.stop.dwelltotmins
 Passenger Load | apc.stop.psgrload
+Passenger Board | apc.stop.psgron
+Passenger Alight | apc.stop.psgroff
 
 The Route ID and Trip ID for each stop event must be converted from the APC ID (recorded as apc.stop.route and apc.stop.trip) to the GTFS ID using lookup tables:
 
@@ -144,7 +146,7 @@ There are three issues that arise as a result of the way this APC data is genera
 |Route-level description | The total route distance divided by the route running time.|
 |Notes | See **1. Stop Spacing** for details of the distance calculations and **4. Running Time** for details of the running time calculations.|
 
-|7.|Observed Speed |
+|7.|Observed Speed without Dwell |
 |:--- |:--- | 
 |Definition | Observed travel speed between two points with dwell time removed.|
 |Unit | Miles per Hour|
@@ -158,7 +160,7 @@ There are three issues that arise as a result of the way this APC data is genera
 |Notes | See **1. Stop Spacing** for details of the distance calculations and **4. Running Time** for details of the running time calculations.|
 
 
-|8.|Occupancy
+|8.|Occupancy |
 |:--- |:--- | 
 |Definition | Number of passengers on a bus at a given location.|
 |Unit | Passengers|
@@ -176,7 +178,7 @@ There are three issues that arise as a result of the way this APC data is genera
 |Definition | Difference between the scheduled bus arrival time and the actual bus arrival time.|
 |Unit | Seconds|
 |Data source | GTFS + APC |
-|Data field | gtfs.stop\_times.arrival\_time + apc.stop.actstoptime||
+|Data field | gtfs.stop\_times.arrival\_time, apc.stop.actstoptime|
 |Periods|Weekday Average by Hour|
 |Min. Sample | One month|
 |Segment-level description | The average of the observed arrival time minus the scheduled arrival time at the first stop of the segment.|
@@ -202,7 +204,7 @@ There are three issues that arise as a result of the way this APC data is genera
 |Definition | Difference between the expected wait time generated from the scheduled and observed headway distributions.|
 |Unit | Minutes|
 |Data source | GTFS + APC|
-|Data field | gtfs.stop\_times.arrival\_time + apc.stop.actstoptime||
+|Data fields | gtfs.stop\_times.arrival\_time, apc.stop.actstoptime|
 |Periods|Weekday Average by Hour|
 |Min. Sample | One month|
 |Segment-level description | The expected passenger wait time when observed headways are used minus the expected passenger wait time when scheduled headways are used. This is averaged across the time period for headways at the first stop in the segment.|
@@ -215,7 +217,7 @@ There are three issues that arise as a result of the way this APC data is genera
 |Definition | Difference between actual travel time and scheduled travel time.|
 |Unit | Minutes|
 |Data source | GTFS + APC|
-|Data field | gtfs.stop\_times.arrival\_time + apc.stop.actstoptime||
+|Data fields | gtfs.stop\_times.arrival\_time, apc.stop.actstoptime|
 |Periods|Weekday Average by Hour|
 |Min. Sample | One month|
 |Segment-level description | Travel time is calculated as the difference between arrival times at the two stops of the segment. Excess travel time is the observed travel time minus the scheduled travel time, averaged across the time period.|
@@ -228,10 +230,49 @@ There are three issues that arise as a result of the way this APC data is genera
 |Definition | Passenger load as a percentage of seated capacity|
 |Unit | Percent|
 |Data source | APC + Bus Capacity Lookup|
-|Data field | apc.stop.actstoptime + load.bus_vehicle.nseats||
-|Periods|Weekday Average by Hour|
+|Data fields | apc.stop.actstoptime, load.bus_vehicle.nseats|
+|Periods | Weekday Average by Hour|
 |Min. Sample | One month|
 |Segment-level description | Crowding is calculated by dividing the passenger load between two stops by the fixed number of seats on the vehicle. |
 |Corridor-level description | Crowding levels are averaged across all routes serving the corridor. |
 |Route-level description | Crowding levels are averaged across all segments in the route. |
 |Notes | Crowding may exceed 100\% if there are more passengers than seats. |
+
+|14.|Boardings |
+|:--- |:--- | 
+|Definition | Number of passengers that board the bus |
+|Unit | Passengers per Trip |
+|Data source | APC |
+|Data field | apc.stop.psgron |
+|Periods | Weekday Average by Hour|
+|Min. Sample | One month|
+|Segment-level description | Boardings is the average number of passengers that board the bus at the first stop in the segment across all trips in the period |
+|Corridor-level description | Crowding levels are averaged across all routes serving the corridor. |
+|Route-level description | Crowding levels are averaged across all segments in the route. |
+|Notes | |
+
+|15.|Revenue Hours |
+|:--- |:--- | 
+|Definition | Total duration of revenue vehicle service across all trips. |
+|Unit | Hours |
+|Data source | APC |
+|Data field | apc.stop.actstoptime |
+|Periods | Weekday Average by Hour |
+|Min. Sample | One month |
+|Segment-level description | Not available at the segment level. |
+|Corridor-level description | Not available at the segment level. |
+|Route-level description | First, the sum of the duration of revenue service is calculated on each day across all trips serving the route. Then the daily average is taken across all of the days in the time period. |
+|Notes | |
+
+|16.|Productivity |
+|:--- |:--- | 
+|Definition | Ridership per revenue hour. |
+|Unit | Passengers per Hour |
+|Data source | APC |
+|Data fields | apc.stop.psgrload, apc.stop.actstoptime |
+|Periods | Weekday Average by Hour |
+|Min. Sample | One month |
+|Segment-level description | Not available at the segment level. |
+|Corridor-level description | Not available at the segment level. |
+|Route-level description | The total ridership for the route divided by revenue hours. |
+|Notes | See **15. Revenue Hours** for the revenue hour calculation methodology. |
